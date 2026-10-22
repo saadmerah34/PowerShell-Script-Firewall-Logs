@@ -22,8 +22,8 @@
     FunctionsToExport = @(
         'Import-FirewallLog' #Importer les journaux Firewall et Pi-hole
         'Search-FirewallLog' #Filtrer les journaux selon les 5 critères
-        'Get-FWSummary'      #Afficher les statistiques des événements
-        'Get-FWTopSourceIP'  #Identifier les IP sources les plus fréquentes
+        'Get-FWSummary'      #Afficher les statistiques des événements Virginia
+        'Get-FWTopSourceIP'  #Identifier les IP sources les plus fréquentes Virginia
         'Resolve-FWFQDN'     #Associer les IP de destination aux FQDN
         'Export-FWReport'    #Exporter un rapport CSV
     )
