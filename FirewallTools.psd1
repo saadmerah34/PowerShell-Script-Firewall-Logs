@@ -10,7 +10,7 @@
     GUID = '8a8b946a-923a-4ce8-812b-cc26b3f54298'
 
     # Auteur
-    Author = 'Saad MERAH , Virginia Moussa Yaya , Loïs Oulassié'
+    Author = 'Saad MERAH '
 
     # Description du module
     Description = 'Module PowerShell pour analyser les journaux Firewall et Pi-hole'
