@@ -24,7 +24,7 @@ function Import-FWLog  {
         # Lit la premiere ligne pour detecter le type de log.
         $firstLine = Get-Content -Path $Path -TotalCount 1
 
-        if ($firstLine -match "cr431-firewall") {
+        if ($firstLine -match 'log_type="Firewall"') {
             $logType = "Firewall"
         }
         elseif ($firstLine -match "dnsmasq") {
@@ -128,10 +128,13 @@ function Import-FWLog  {
         }
     }
     catch {
-        Write-Error "Import-FirewallLog failed: $_"
+        Write-Error "Import-FWLog failed: $_"
     }
 }
-# Cette fonction filtre les logs du pare-feu selon plusieurs criteres.
+# --------------------------------------------
+# FUNCTION : Filtre les logs du pare-feu selon plusieurs criteres.
+# ---------------------------------------------------------------------
+
 function Search-FWLog {
     param(
         [Parameter(Mandatory = $true)]
@@ -179,7 +182,44 @@ function Search-FWLog {
 }
 
 
+
 function Get-FWSummary {}
-function Get-FWTopSourceIP {}
+# --------------------------------------------
+# FUNCTION : Affiche les adresses IP sources les plus actives.
+# ---------------------------------------------------------------------
+
+function Get-FWTopSourceIP {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [int]$Top = 10
+    )
+
+    try {
+        # Importe les logs avec la premiere fonction.
+        $logs = Import-FWLog -Path $Path
+
+        # Garde seulement les logs Firewall qui ont une IP source.
+        $logs = $logs | Where-Object { $_.LogType -eq "Firewall" -and $_.SourceIP }
+
+        # Regroupe par IP source, trie du plus grand au plus petit et garde les premiers.
+        $topIPs = $logs |
+            Group-Object -Property SourceIP |
+            Sort-Object -Property Count -Descending |
+            Select-Object -First $Top |
+            ForEach-Object {
+                [PSCustomObject]@{
+                    SourceIP = $_.Name
+                    Count    = $_.Count
+                }
+            }
+
+        return $topIPs
+    }
+    catch {
+        Write-Error "Get-FWTopSourceIP failed: $_"
+    }
+}
 function Resolve-FWFQDN {}
 function Export-FWReport {}
