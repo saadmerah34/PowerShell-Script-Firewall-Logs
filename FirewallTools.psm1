@@ -183,7 +183,63 @@ function Search-FWLog {
 
 
 
-function Get-FWSummary {}
+function Get-FWSummary {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [ValidateRange(1, 50)]
+        [int]$Top = 5
+    )
+
+    try {
+        # Importe les logs et garde seulement les entrées Firewall.
+        $logs = Import-FWLog -Path $Path |
+                Where-Object { $_.LogType -eq "Firewall" }
+
+        if (-not $logs) {
+            throw "No firewall entries found in: $Path"
+        }
+
+        # Petite fonction interne pour transformer un regroupement en texte lisible.
+        # Exemple : "Allowed (120), Denied (30)"
+        function Format-Group($Items, $Property, $Limit = 0) {
+            $groups = $Items |
+                      Where-Object { $_.$Property } |
+                      Group-Object -Property $Property |
+                      Sort-Object Count -Descending
+            if ($Limit -gt 0) { $groups = $groups | Select-Object -First $Limit }
+            ($groups | ForEach-Object { "$($_.Name) ($($_.Count))" }) -join ", "
+        }
+
+        # Période couverte par le journal.
+        $times = $logs | Where-Object { $_.Time } | Sort-Object Time
+
+        # Nombre de connexions permises et bloquées.
+        $allowed = ($logs | Where-Object { $_.Action -match "allow" }).Count
+        $denied  = ($logs | Where-Object { $_.Action -match "den|drop|block" }).Count
+
+        [PSCustomObject]@{
+            File                 = (Resolve-Path $Path).Path
+            TotalEvents          = $logs.Count
+            FirstEvent           = $times[0].Time
+            LastEvent            = $times[-1].Time
+            UniqueSourceIPs      = ($logs.SourceIP      | Where-Object { $_ } | Sort-Object -Unique).Count
+            UniqueDestinationIPs = ($logs.DestinationIP | Where-Object { $_ } | Sort-Object -Unique).Count
+            UniqueUsers          = ($logs.User          | Where-Object { $_ } | Sort-Object -Unique).Count
+            Allowed              = $allowed
+            Denied               = $denied
+            ByAction             = Format-Group $logs "Action"
+            ByProtocol           = Format-Group $logs "Protocol"
+            TopRules             = Format-Group $logs "RuleName" $Top
+        }
+    }
+    catch {
+        Write-Error "Get-FWSummary failed: $_"
+    }
+}
+
 # --------------------------------------------
 # FUNCTION : Affiche les adresses IP sources les plus actives.
 # ---------------------------------------------------------------------
