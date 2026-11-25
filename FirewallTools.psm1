@@ -136,6 +136,26 @@ function Import-FWLog  {
 # ---------------------------------------------------------------------
 
 function Search-FWLog {
+   <#
+.SYNOPSIS
+Recherche les entrées d’un journal de pare-feu qui correspondent aux filtres indiqués.
+
+.DESCRIPTION
+Lit le fichier indiqué par -Path avec Import-FWLog et conserve uniquement
+les entrées du pare-feu. Les adresses IP source et destination ainsi que
+le port de destination doivent correspondre exactement aux valeurs indiquées.
+Le nom d’utilisateur et le nom de règle acceptent les correspondances partielles.
+
+Si plusieurs filtres sont fournis, chaque entrée doit satisfaire tous les filtres.
+Sans filtre, la fonction retourne toutes les entrées du pare-feu.
+Les résultats sont retournés sous forme d’objets utilisables dans le pipeline.
+
+.EXAMPLE
+Search-FWLog -Path $Path -SourceIP '10.1.20.33' -DestinationPort 443
+
+Retourne les entrées dont l’adresse IP source est 10.1.20.33 et le port
+de destination est 443.
+#>
     param(
         [Parameter(Mandatory = $true)]
         [string]$Path,
@@ -239,7 +259,6 @@ function Get-FWSummary {
         Write-Error "Get-FWSummary failed: $_"
     }
 }
-
 # --------------------------------------------
 # FUNCTION : Affiche les adresses IP sources les plus actives.
 # ---------------------------------------------------------------------
@@ -277,5 +296,79 @@ function Get-FWTopSourceIP {
         Write-Error "Get-FWTopSourceIP failed: $_"
     }
 }
-function Resolve-FWFQDN {}
-function Export-FWReport {}
+function Resolve-FWFQDN {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [string]$IPAddress
+    )
+
+    process {
+        $address = $null
+        $fqdn = $null
+
+        if (-not [System.Net.IPAddress]::TryParse($IPAddress, [ref]$address)) {
+            $status = 'Invalid IP address'
+        }
+        else {
+            try {
+                $fqdn = [System.Net.Dns]::GetHostEntry($address).HostName
+                $status = 'Resolved'
+            }
+            catch {
+                $status = 'Reverse lookup failed'
+            }
+        }
+
+        [PSCustomObject]@{
+            IPAddress = $IPAddress
+            FQDN      = $fqdn
+            Status    = $status
+        }
+    }
+}
+
+function Export-FWReport {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string[]]$Path,
+
+        [Parameter(Mandatory)]
+        [string]$OutputPath
+    )
+
+    $logs = @(
+        foreach ($file in $Path) {
+            Import-FWLog -Path $file -ErrorAction Stop
+        }
+    )
+
+    if ($logs.Count -eq 0) {
+        Write-Warning 'No log entries to export.'
+        return
+    }
+
+    $columns = @('LogType')
+    if ($logs.LogType -contains 'Firewall') {
+        $columns += 'Time', 'SourceIP', 'DestinationIP', 'DestinationPort',
+                    'User', 'RuleName', 'Action', 'Protocol', 'Application'
+    }
+    if ($logs.LogType -contains 'PiHole') {
+        $columns += 'Event', 'Query', 'Domain', 'ClientIP', 'Answer'
+    }
+    $columns += 'RawLine'
+
+    # Cree le dossier de sortie s'il n'existe pas.
+    $outputDir = Split-Path -Path $OutputPath -Parent
+    if ($outputDir -and -not (Test-Path -LiteralPath $outputDir)) {
+        New-Item -ItemType Directory -Path $outputDir -Force -ErrorAction Stop | Out-Null
+    }
+
+        # -Force remplace un rapport existant.
+    $logs |
+        Select-Object -Property $columns |
+        Export-Csv -LiteralPath $OutputPath -NoTypeInformation -Encoding UTF8 -Force -ErrorAction Stop
+
+    Get-Item -LiteralPath $OutputPath
+}
